@@ -1,0 +1,393 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Salto Lógico - Alinhamento de Precisão</title>
+    <style>
+        :root {
+            --mc-green: #4AA02C;
+            --mc-panel: #2d2d2d;
+            --mc-sky: #87CEEB;
+            --mc-gold: #FFD700;
+            --mc-red: #e74c3c;
+            --mc-blue: #3498db;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; touch-action: manipulation; }
+        body { background: #000; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; border-bottom: 3px solid #111; z-index: 10; }
+        
+        #main-container { flex: 1; display: flex; overflow: hidden; }
+        #viewport { flex: 1; position: relative; background: var(--mc-sky); display: flex; justify-content: center; align-items: center; }
+        canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; background: var(--mc-sky); }
+
+        #block-panel { width: 420px; background: var(--mc-panel); border-left: 4px solid #111; display: flex; flex-direction: column; }
+        .toolbox { padding: 15px; background: #3c3c3c; border-bottom: 2px solid #111; }
+        .blocks-menu { display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        .block { padding: 8px 12px; border-radius: 4px; color: white; font-weight: bold; font-size: 0.85rem; cursor: pointer; border-bottom: 4px solid rgba(0,0,0,0.3); min-width: 110px; text-align: center; }
+        .block-move { background: #cf4520; }
+        .block-jump { background: #e67e22; }
+
+        #workspace { flex: 1; padding: 15px; overflow-y: auto; background: #252526; display: flex; flex-direction: column; gap: 8px; }
+        
+        .workspace-row { 
+            background: rgba(255,255,255,0.05); 
+            border: 2px dashed #444; 
+            border-radius: 6px; 
+            padding: 8px; 
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            min-height: 60px;
+            position: relative;
+        }
+        .workspace-row.active { border-color: var(--mc-green); background: rgba(74, 160, 44, 0.1); }
+        
+        .row-label { position: absolute; left: -10px; top: -10px; background: #111; color: #777; font-size: 10px; padding: 2px 5px; border-radius: 3px; }
+
+        .btn-delete-row { background: transparent; border: none; color: #ff5f56; cursor: pointer; font-size: 1.2rem; margin-left: auto; }
+
+        .execution-bar { padding: 15px; background: #222; display: flex; gap: 10px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        .btn:active { transform: scale(0.95); }
+        .btn-run { background: var(--mc-green); color: white; }
+
+        #ui-stats { position: absolute; top: 20px; left: 20px; pointer-events: none; z-index: 5; }
+        .stat-card { background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 4px; color: white; border-left: 4px solid var(--mc-green); font-weight: bold; margin-bottom: 5px; }
+        
+        .modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; color: white; text-align: center; }
+        .modal-content { background: #333; padding: 30px; border-radius: 8px; max-width: 80%; border: 4px solid var(--mc-green); }
+        .victory .modal-title { color: var(--mc-gold); font-size: 2rem; }
+        .fail .modal-title { color: var(--mc-red); font-size: 2rem; }
+
+        .highlight-exec { outline: 3px solid white; box-shadow: 0 0 15px white; }
+
+        @media (max-width: 900px) {
+            #main-container { flex-direction: column; }
+            #block-panel { width: 100%; height: 45%; border-left: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="font-weight: bold;">SALTO LÓGICO <span style="color: var(--mc-green);">| ALINHAMENTO</span></div>
+    <div id="header-level">Nível 1</div>
+</header>
+
+<div id="main-container">
+    <section id="viewport">
+        <div id="ui-stats">
+            <div class="stat-card">💎 Esmeraldas: <span id="count">0</span> / <span id="total">0</span></div>
+            <div class="stat-card" style="border-left-color: var(--mc-blue)">💡 Dica: As plataformas estão conectadas!</div>
+        </div>
+        
+        <div id="victory-modal" class="modal victory">
+            <div class="modal-content">
+                <div class="modal-title">FASE CONCLUÍDA!</div>
+                <p>Sincronização perfeita! Todos os itens coletados.</p>
+                <button class="btn btn-run" style="margin-top: 20px;" onclick="loadNextLevel()">Próxima Fase</button>
+            </div>
+        </div>
+
+        <div id="fail-modal" class="modal fail">
+            <div class="modal-content">
+                <div class="modal-title">OPS! FORA DA TELA</div>
+                <p>O robô saiu da área segura. Verifique o alinhamento do seu código.</p>
+                <button class="btn" style="background: var(--mc-red); color: white; margin-top: 20px;" onclick="retryLevel()">Reiniciar</button>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </section>
+
+    <section id="block-panel">
+        <div class="toolbox">
+            <p style="color: #aaa; font-size: 11px; margin-bottom: 8px;">MONTE SUA SEQUÊNCIA LÓGICA:</p>
+            <div class="blocks-menu">
+                <div class="block block-move" onclick="addRow('move_fwd')">+ Andar</div>
+                <div class="block block-jump" onclick="addRow('jump')">+ Pular</div>
+            </div>
+        </div>
+        <div id="workspace"></div>
+        <div class="execution-bar">
+            <button class="btn btn-run" id="btn-run" onclick="runCode()">Executar</button>
+            <button class="btn" style="background:#555; color:white;" onclick="clearWorkspace()">Limpar</button>
+        </div>
+    </section>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 640; canvas.height = 480;
+
+    const MOVE_STEP = 80; // Aumentado para facilitar o alcance entre plataformas
+    const ROBOT_WIDTH = 32;
+    const P_HEIGHT = 20;
+
+    // ALINHAMENTO: p.x + p.w de uma plataforma = p.x da próxima
+    const levels = [
+        {
+            title: "Fase 1: Escada Perfeita",
+            platforms: [
+                { x: 0, y: 400, w: 120, h: 80 }, 
+                { x: 120, y: 320, w: 120, h: P_HEIGHT },
+                { x: 240, y: 240, w: 120, h: P_HEIGHT },
+                { x: 360, y: 160, w: 120, h: P_HEIGHT }
+            ],
+            items: [
+                { x: 180, y: 280, collected: false },
+                { x: 420, y: 120, collected: false }
+            ],
+            startPos: { x: 40, y: 350 }
+        },
+        {
+            title: "Fase 2: Conexão em Zig-Zag",
+            platforms: [
+                { x: 0, y: 420, w: 100, h: 60 },
+                { x: 100, y: 340, w: 150, h: P_HEIGHT },
+                { x: 250, y: 260, w: 150, h: P_HEIGHT },
+                { x: 400, y: 180, w: 150, h: P_HEIGHT }
+            ],
+            items: [
+                { x: 175, y: 300, collected: false },
+                { x: 325, y: 220, collected: false },
+                { x: 475, y: 140, collected: false }
+            ],
+            startPos: { x: 20, y: 370 }
+        },
+        {
+            title: "Fase 3: O Desafio Final",
+            platforms: [
+                { x: 0, y: 400, w: 120, h: 80 },
+                { x: 120, y: 400, w: 120, h: P_HEIGHT },
+                { x: 240, y: 320, w: 120, h: P_HEIGHT },
+                { x: 360, y: 240, w: 120, h: P_HEIGHT },
+                { x: 480, y: 160, w: 120, h: P_HEIGHT }
+            ],
+            items: [
+                { x: 300, y: 280, collected: false },
+                { x: 540, y: 120, collected: false }
+            ],
+            startPos: { x: 30, y: 350 }
+        }
+    ];
+
+    let currentLevelIdx = 0;
+    let commandRows = [];
+    let isRunning = false;
+    let score = 0;
+    let gameOver = false;
+
+    const agent = {
+        x: 0, y: 0, w: ROBOT_WIDTH, h: 48,
+        vx: 0, vy: 0,
+        jumpPower: -13, 
+        gravity: 0.6,
+        onGround: false
+    };
+
+    function initLevel(idx) {
+        const lv = levels[idx];
+        document.getElementById('header-level').innerText = lv.title;
+        document.getElementById('total').innerText = lv.items.length;
+        document.getElementById('count').innerText = "0";
+        document.getElementById('victory-modal').style.display = 'none';
+        document.getElementById('fail-modal').style.display = 'none';
+        
+        agent.x = lv.startPos.x;
+        agent.y = lv.startPos.y;
+        agent.vx = 0; agent.vy = 0;
+        score = 0;
+        gameOver = false;
+        isRunning = false;
+        lv.items.forEach(it => it.collected = false);
+    }
+
+    function addRow(type) {
+        if(isRunning || gameOver) return;
+        commandRows.push([type]);
+        updateWorkspace();
+    }
+
+    function addBlockToRow(rowIndex, type) {
+        if(isRunning || gameOver) return;
+        if(commandRows[rowIndex].length < 2) {
+            commandRows[rowIndex].push(type);
+            updateWorkspace();
+        }
+    }
+
+    function removeRow(index) { if(!isRunning) { commandRows.splice(index, 1); updateWorkspace(); } }
+    function clearWorkspace() { if(!isRunning) { commandRows = []; updateWorkspace(); retryLevel(); } }
+
+    function updateWorkspace() {
+        const ws = document.getElementById('workspace');
+        ws.innerHTML = '';
+        commandRows.forEach((row, i) => {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'workspace-row';
+            rowDiv.id = `row-exec-${i}`;
+            
+            const label = document.createElement('div');
+            label.className = 'row-label';
+            label.innerText = `PASSO ${i+1}`;
+            rowDiv.appendChild(label);
+
+            row.forEach(cmd => {
+                const block = document.createElement('div');
+                block.className = `block ${cmd==='jump'?'block-jump':'block-move'}`;
+                block.innerText = cmd==='jump'?'Pular':'Andar';
+                rowDiv.appendChild(block);
+            });
+
+            if(row.length < 2) {
+                const addBtn = document.createElement('button');
+                addBtn.style = "background: #444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 10px;";
+                addBtn.innerText = "+ Combinar";
+                addBtn.onclick = () => {
+                    const next = row[0] === 'jump' ? 'move_fwd' : 'jump';
+                    addBlockToRow(i, next);
+                };
+                rowDiv.appendChild(addBtn);
+            }
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-delete-row';
+            delBtn.innerHTML = '×';
+            delBtn.onclick = () => removeRow(i);
+            rowDiv.appendChild(delBtn);
+
+            ws.appendChild(rowDiv);
+        });
+    }
+
+    async function runCode() {
+        if (isRunning || commandRows.length === 0 || gameOver) return;
+        isRunning = true; 
+        retryLevel();
+
+        for (let i = 0; i < commandRows.length; i++) {
+            if (gameOver) break;
+            const el = document.getElementById(`row-exec-${i}`);
+            if(el) el.classList.add('active', 'highlight-exec');
+            
+            const actions = commandRows[i].map(cmd => executeAction(cmd));
+            await Promise.all(actions);
+            
+            if(el) el.classList.remove('active', 'highlight-exec');
+            if(score >= levels[currentLevelIdx].items.length) break;
+            await new Promise(r => setTimeout(r, 150));
+        }
+        isRunning = false;
+        if(score >= levels[currentLevelIdx].items.length) document.getElementById('victory-modal').style.display = 'flex';
+    }
+
+    function executeAction(type) {
+        return new Promise(resolve => {
+            if (type === 'jump') {
+                if (agent.onGround) agent.vy = agent.jumpPower;
+                setTimeout(resolve, 700);
+            } else {
+                let startX = agent.x;
+                let targetX = agent.x + MOVE_STEP;
+                let duration = 700;
+                let startTime = Date.now();
+
+                const loop = () => {
+                    if (gameOver) { resolve(); return; }
+                    let elapsed = Date.now() - startTime;
+                    let progress = Math.min(elapsed / duration, 1);
+                    agent.x = startX + (MOVE_STEP * progress);
+                    if (progress < 1) requestAnimationFrame(loop);
+                    else { agent.x = targetX; resolve(); }
+                };
+                loop();
+            }
+        });
+    }
+
+    function retryLevel() {
+        const lv = levels[currentLevelIdx];
+        agent.x = lv.startPos.x;
+        agent.y = lv.startPos.y;
+        agent.vx = 0; agent.vy = 0;
+        score = 0;
+        document.getElementById('count').innerText = "0";
+        lv.items.forEach(it => it.collected = false);
+        gameOver = false;
+        document.getElementById('fail-modal').style.display = 'none';
+    }
+
+    function loadNextLevel() {
+        currentLevelIdx = (currentLevelIdx + 1) % levels.length;
+        initLevel(currentLevelIdx);
+        commandRows = [];
+        updateWorkspace();
+    }
+
+    function physics() {
+        if (gameOver) return;
+        agent.vy += agent.gravity;
+        agent.y += agent.vy;
+        agent.onGround = false;
+
+        const lv = levels[currentLevelIdx];
+        lv.platforms.forEach(p => {
+            if (agent.x < p.x + p.w && agent.x + agent.w > p.x && agent.y < p.y + p.h && agent.y + agent.h > p.y) {
+                if (agent.vy > 0 && agent.y + agent.h - agent.vy <= p.y) {
+                    agent.y = p.y - agent.h; agent.vy = 0; agent.onGround = true;
+                }
+            }
+        });
+
+        lv.items.forEach(it => {
+            if (!it.collected && Math.hypot((agent.x+16)-it.x, (agent.y+24)-it.y) < 25) {
+                it.collected = true; score++; document.getElementById('count').innerText = score;
+            }
+        });
+
+        if (agent.y > canvas.height) {
+            gameOver = true; isRunning = false;
+            document.getElementById('fail-modal').style.display = 'flex';
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const lv = levels[currentLevelIdx];
+        
+        lv.platforms.forEach(p => { 
+            ctx.fillStyle = "#795548"; ctx.fillRect(p.x, p.y, p.w, p.h); 
+            ctx.fillStyle = "#4AA02C"; ctx.fillRect(p.x, p.y, p.w, 8); 
+            // Guia visual de alinhamento (opcional, linha fina cinza)
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            ctx.strokeRect(p.x, p.y, p.w, p.h);
+        });
+
+        lv.items.forEach(it => { 
+            if(!it.collected) { 
+                ctx.fillStyle = "#00FF00"; ctx.beginPath();
+                ctx.moveTo(it.x, it.y - 10); ctx.lineTo(it.x + 8, it.y);
+                ctx.lineTo(it.x, it.y + 10); ctx.lineTo(it.x - 8, it.y);
+                ctx.closePath(); ctx.fill(); ctx.strokeStyle = "white"; ctx.stroke();
+            } 
+        });
+
+        ctx.fillStyle = "#bdc3c7"; ctx.fillRect(agent.x+6, agent.y, 20, 20);
+        ctx.fillStyle = "#95a5a6"; ctx.fillRect(agent.x, agent.y+20, 32, 28);
+        ctx.fillStyle = "#e74c3c"; ctx.fillRect(agent.x+12, agent.y+28, 8, 8);
+
+        physics();
+        requestAnimationFrame(draw);
+    }
+
+    initLevel(0);
+    draw();
+</script>
+</body>
+</html>
