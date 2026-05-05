@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Salto Lógico - Alinhamento de Precisão</title>
+    <title>Salto Lógico - Edição Completa</title>
     <style>
         :root {
             --mc-green: #4AA02C;
@@ -13,11 +12,40 @@
             --mc-gold: #FFD700;
             --mc-red: #e74c3c;
             --mc-blue: #3498db;
+            --mc-dark: #1e1e1e;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; touch-action: manipulation; }
-        body { background: #000; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; border-bottom: 3px solid #111; z-index: 10; }
+        body { background: #000; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: white; }
+        
+        /* Sistema de Telas */
+        .screen { display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; flex-direction: column; }
+        .screen.active { display: flex; }
+
+        /* Estilo Tela Inicial */
+        #home-screen { 
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .title-container h1 { font-size: 5rem; color: var(--mc-green); text-shadow: 5px 5px #000; font-weight: 900; letter-spacing: -2px; }
+        .title-container p { font-size: 1.2rem; color: #ccc; margin-bottom: 40px; }
+
+        /* Estilo Seleção de Fases */
+        #level-screen { background: var(--mc-dark); padding: 40px; align-items: center; }
+        .level-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 900px; margin-top: 40px; }
+        .level-card { 
+            background: #333; border: 4px solid #444; border-radius: 12px; padding: 30px; 
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); text-align: center;
+        }
+        .level-card:hover { border-color: var(--mc-green); transform: translateY(-10px); background: #3d3d3d; }
+        .level-card h3 { color: var(--mc-gold); margin-bottom: 10px; font-size: 1.5rem; }
+
+        /* Interface do Jogo */
+        header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; border-bottom: 3px solid #111; z-index: 10; align-items: center; }
         
         #main-container { flex: 1; display: flex; overflow: hidden; }
         #viewport { flex: 1; position: relative; background: var(--mc-sky); display: flex; justify-content: center; align-items: center; }
@@ -34,26 +62,19 @@
         #workspace { flex: 1; padding: 15px; overflow-y: auto; background: #252526; display: flex; flex-direction: column; gap: 8px; }
         
         .workspace-row { 
-            background: rgba(255,255,255,0.05); 
-            border: 2px dashed #444; 
-            border-radius: 6px; 
-            padding: 8px; 
-            display: flex; 
-            gap: 10px; 
-            align-items: center; 
-            min-height: 60px;
-            position: relative;
+            background: rgba(255,255,255,0.05); border: 2px dashed #444; border-radius: 6px; padding: 8px; 
+            display: flex; gap: 10px; align-items: center; min-height: 60px; position: relative;
         }
         .workspace-row.active { border-color: var(--mc-green); background: rgba(74, 160, 44, 0.1); }
-        
         .row-label { position: absolute; left: -10px; top: -10px; background: #111; color: #777; font-size: 10px; padding: 2px 5px; border-radius: 3px; }
-
         .btn-delete-row { background: transparent; border: none; color: #ff5f56; cursor: pointer; font-size: 1.2rem; margin-left: auto; }
 
         .execution-bar { padding: 15px; background: #222; display: flex; gap: 10px; }
-        .btn { flex: 1; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s; text-align: center; text-decoration: none; display: inline-block; }
         .btn:active { transform: scale(0.95); }
         .btn-run { background: var(--mc-green); color: white; }
+        .btn-menu { background: #555; color: white; }
+        .btn-large { padding: 15px 40px; font-size: 1.5rem; }
 
         #ui-stats { position: absolute; top: 20px; left: 20px; pointer-events: none; z-index: 5; }
         .stat-card { background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 4px; color: white; border-left: 4px solid var(--mc-green); font-weight: bold; margin-bottom: 5px; }
@@ -63,8 +84,6 @@
         .victory .modal-title { color: var(--mc-gold); font-size: 2rem; }
         .fail .modal-title { color: var(--mc-red); font-size: 2rem; }
 
-        .highlight-exec { outline: 3px solid white; box-shadow: 0 0 15px white; }
-
         @media (max-width: 900px) {
             #main-container { flex-direction: column; }
             #block-panel { width: 100%; height: 45%; border-left: none; }
@@ -73,51 +92,78 @@
 </head>
 <body>
 
-<header>
-    <div style="font-weight: bold;">SALTO LÓGICO <span style="color: var(--mc-green);">| ALINHAMENTO</span></div>
-    <div id="header-level">Nível 1</div>
-</header>
+<!-- TELA INICIAL -->
+<div id="home-screen" class="screen active">
+    <div class="title-container">
+        <h1>SALTO LÓGICO</h1>
+        <p>Aprenda lógica de programação saltando obstáculos!</p>
+        <button class="btn btn-run btn-large" onclick="showScreen('level-screen')">INICIAR JOGO</button>
+    </div>
+</div>
 
-<div id="main-container">
-    <section id="viewport">
-        <div id="ui-stats">
-            <div class="stat-card">💎 Esmeraldas: <span id="count">0</span> / <span id="total">0</span></div>
-            <div class="stat-card" style="border-left-color: var(--mc-blue)">💡 Dica: As plataformas estão conectadas!</div>
-        </div>
-        
-        <div id="victory-modal" class="modal victory">
-            <div class="modal-content">
-                <div class="modal-title">FASE CONCLUÍDA!</div>
-                <p>Sincronização perfeita! Todos os itens coletados.</p>
-                <button class="btn btn-run" style="margin-top: 20px;" onclick="loadNextLevel()">Próxima Fase</button>
+<!-- TELA SELEÇÃO DE FASE -->
+<div id="level-screen" class="screen">
+    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <button class="btn btn-menu" style="max-width: 120px;" onclick="showScreen('home-screen')">← Menu</button>
+        <h2 style="color: var(--mc-green); font-size: 2rem;">ESCOLHA SEU DESAFIO</h2>
+        <div style="width: 120px;"></div>
+    </div>
+    <div id="level-grid" class="level-grid">
+        <!-- Gerado via JS -->
+    </div>
+</div>
+
+<!-- TELA DO JOGO -->
+<div id="game-screen" class="screen">
+    <header>
+        <button class="btn btn-menu" style="padding: 5px 15px; font-size: 12px; max-width: 100px;" onclick="showScreen('level-screen')">Voltar</button>
+        <div style="font-weight: bold;">SALTO LÓGICO <span id="header-level-title" style="color: var(--mc-green);">| Nível 1</span></div>
+        <div style="width: 100px;"></div>
+    </header>
+
+    <div id="main-container">
+        <section id="viewport">
+            <div id="ui-stats">
+                <div class="stat-card">💎 Esmeraldas: <span id="count">0</span> / <span id="total">0</span></div>
             </div>
-        </div>
-
-        <div id="fail-modal" class="modal fail">
-            <div class="modal-content">
-                <div class="modal-title">OPS! FORA DA TELA</div>
-                <p>O robô saiu da área segura. Verifique o alinhamento do seu código.</p>
-                <button class="btn" style="background: var(--mc-red); color: white; margin-top: 20px;" onclick="retryLevel()">Reiniciar</button>
+            
+            <div id="victory-modal" class="modal victory">
+                <div class="modal-content">
+                    <div class="modal-title">FASE CONCLUÍDA!</div>
+                    <p>Sincronização perfeita! Todos os itens coletados.</p>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button class="btn btn-menu" onclick="showScreen('level-screen')">Fases</button>
+                        <button class="btn btn-run" onclick="loadNextLevel()">Próxima</button>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <canvas id="gameCanvas"></canvas>
-    </section>
-
-    <section id="block-panel">
-        <div class="toolbox">
-            <p style="color: #aaa; font-size: 11px; margin-bottom: 8px;">MONTE SUA SEQUÊNCIA LÓGICA:</p>
-            <div class="blocks-menu">
-                <div class="block block-move" onclick="addRow('move_fwd')">+ Andar</div>
-                <div class="block block-jump" onclick="addRow('jump')">+ Pular</div>
+            <div id="fail-modal" class="modal fail">
+                <div class="modal-content">
+                    <div class="modal-title">OPS! FORA DA TELA</div>
+                    <p>O robô saiu da área segura. Verifique o alinhamento do seu código.</p>
+                    <button class="btn" style="background: var(--mc-red); color: white; margin-top: 20px;" onclick="retryLevel()">Reiniciar</button>
+                </div>
             </div>
-        </div>
-        <div id="workspace"></div>
-        <div class="execution-bar">
-            <button class="btn btn-run" id="btn-run" onclick="runCode()">Executar</button>
-            <button class="btn" style="background:#555; color:white;" onclick="clearWorkspace()">Limpar</button>
-        </div>
-    </section>
+
+            <canvas id="gameCanvas"></canvas>
+        </section>
+
+        <section id="block-panel">
+            <div class="toolbox">
+                <p style="color: #aaa; font-size: 11px; margin-bottom: 8px;">MONTE SUA SEQUÊNCIA LÓGICA:</p>
+                <div class="blocks-menu">
+                    <div class="block block-move" onclick="addRow('move_fwd')">+ Andar</div>
+                    <div class="block block-jump" onclick="addRow('jump')">+ Pular</div>
+                </div>
+            </div>
+            <div id="workspace"></div>
+            <div class="execution-bar">
+                <button class="btn btn-run" id="btn-run" onclick="runCode()">Executar</button>
+                <button class="btn btn-menu" onclick="clearWorkspace()">Limpar</button>
+            </div>
+        </section>
+    </div>
 </div>
 
 <script>
@@ -125,13 +171,13 @@
     const ctx = canvas.getContext('2d');
     canvas.width = 640; canvas.height = 480;
 
-    const MOVE_STEP = 80; // Aumentado para facilitar o alcance entre plataformas
+    const MOVE_STEP = 80;
     const ROBOT_WIDTH = 32;
     const P_HEIGHT = 20;
 
-    // ALINHAMENTO: p.x + p.w de uma plataforma = p.x da próxima
     const levels = [
         {
+            id: 0,
             title: "Fase 1: Escada Perfeita",
             platforms: [
                 { x: 0, y: 400, w: 120, h: 80 }, 
@@ -146,6 +192,7 @@
             startPos: { x: 40, y: 350 }
         },
         {
+            id: 1,
             title: "Fase 2: Conexão em Zig-Zag",
             platforms: [
                 { x: 0, y: 420, w: 100, h: 60 },
@@ -161,6 +208,7 @@
             startPos: { x: 20, y: 370 }
         },
         {
+            id: 2,
             title: "Fase 3: O Desafio Final",
             platforms: [
                 { x: 0, y: 400, w: 120, h: 80 },
@@ -185,15 +233,40 @@
 
     const agent = {
         x: 0, y: 0, w: ROBOT_WIDTH, h: 48,
-        vx: 0, vy: 0,
-        jumpPower: -13, 
-        gravity: 0.6,
-        onGround: false
+        vx: 0, vy: 0, jumpPower: -13, gravity: 0.6, onGround: false
     };
 
+    // --- Navegação ---
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        
+        if (screenId === 'level-screen') {
+            renderLevelCards();
+        } else if (screenId === 'game-screen') {
+            initLevel(currentLevelIdx);
+        }
+    }
+
+    function renderLevelCards() {
+        const grid = document.getElementById('level-grid');
+        grid.innerHTML = '';
+        levels.forEach((lv, i) => {
+            const card = document.createElement('div');
+            card.className = 'level-card';
+            card.innerHTML = `<h3>${lv.title}</h3><p>${lv.items.length} Colecionáveis</p>`;
+            card.onclick = () => {
+                currentLevelIdx = i;
+                showScreen('game-screen');
+            };
+            grid.appendChild(card);
+        });
+    }
+
+    // --- Lógica do Jogo ---
     function initLevel(idx) {
         const lv = levels[idx];
-        document.getElementById('header-level').innerText = lv.title;
+        document.getElementById('header-level-title').innerText = `| ${lv.title}`;
         document.getElementById('total').innerText = lv.items.length;
         document.getElementById('count').innerText = "0";
         document.getElementById('victory-modal').style.display = 'none';
@@ -205,6 +278,8 @@
         score = 0;
         gameOver = false;
         isRunning = false;
+        commandRows = [];
+        updateWorkspace();
         lv.items.forEach(it => it.collected = false);
     }
 
@@ -274,12 +349,12 @@
         for (let i = 0; i < commandRows.length; i++) {
             if (gameOver) break;
             const el = document.getElementById(`row-exec-${i}`);
-            if(el) el.classList.add('active', 'highlight-exec');
+            if(el) el.classList.add('active');
             
             const actions = commandRows[i].map(cmd => executeAction(cmd));
             await Promise.all(actions);
             
-            if(el) el.classList.remove('active', 'highlight-exec');
+            if(el) el.classList.remove('active');
             if(score >= levels[currentLevelIdx].items.length) break;
             await new Promise(r => setTimeout(r, 150));
         }
@@ -325,9 +400,7 @@
 
     function loadNextLevel() {
         currentLevelIdx = (currentLevelIdx + 1) % levels.length;
-        initLevel(currentLevelIdx);
-        commandRows = [];
-        updateWorkspace();
+        showScreen('game-screen');
     }
 
     function physics() {
@@ -359,12 +432,15 @@
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!document.getElementById('game-screen').classList.contains('active')) {
+             requestAnimationFrame(draw);
+             return;
+        }
+
         const lv = levels[currentLevelIdx];
-        
         lv.platforms.forEach(p => { 
             ctx.fillStyle = "#795548"; ctx.fillRect(p.x, p.y, p.w, p.h); 
             ctx.fillStyle = "#4AA02C"; ctx.fillRect(p.x, p.y, p.w, 8); 
-            // Guia visual de alinhamento (opcional, linha fina cinza)
             ctx.strokeStyle = "rgba(255,255,255,0.1)";
             ctx.strokeRect(p.x, p.y, p.w, p.h);
         });
@@ -378,6 +454,7 @@
             } 
         });
 
+        // Robô
         ctx.fillStyle = "#bdc3c7"; ctx.fillRect(agent.x+6, agent.y, 20, 20);
         ctx.fillStyle = "#95a5a6"; ctx.fillRect(agent.x, agent.y+20, 32, 28);
         ctx.fillStyle = "#e74c3c"; ctx.fillRect(agent.x+12, agent.y+28, 8, 8);
@@ -386,7 +463,6 @@
         requestAnimationFrame(draw);
     }
 
-    initLevel(0);
     draw();
 </script>
 </body>
